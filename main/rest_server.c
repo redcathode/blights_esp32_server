@@ -132,12 +132,13 @@ static esp_err_t light_brightness_post_handler(httpd_req_t *req) // all 0-1023
     buf[total_len] = '\0';
 
     cJSON *root = cJSON_Parse(buf);
-    int red = cJSON_GetObjectItem(root, "red")->valueint;
-    int green = cJSON_GetObjectItem(root, "green")->valueint;
-    int blue = cJSON_GetObjectItem(root, "blue")->valueint;
-    int warmwhite = cJSON_GetObjectItem(root, "warmwhite")->valueint;
-    set_lighting_values(red, green, blue, warmwhite);
-    ESP_LOGI(REST_TAG, "Light control: red = %d, green = %d, blue = %d, warmwhite = %d", red, green, blue, warmwhite);
+    globalLightingValues.red = cJSON_GetObjectItem(root, "red")->valueint;
+    globalLightingValues.green = cJSON_GetObjectItem(root, "green")->valueint;
+    globalLightingValues.blue = cJSON_GetObjectItem(root, "blue")->valueint;
+    globalLightingValues.warmwhite = cJSON_GetObjectItem(root, "warmwhite")->valueint;
+    
+    set_lighting_values_from_global();
+    ESP_LOGI(REST_TAG, "Light control: red = %d, green = %d, blue = %d, warmwhite = %d", globalLightingValues.red, globalLightingValues.green, globalLightingValues.blue, globalLightingValues.warmwhite);
     cJSON_Delete(root);
     httpd_resp_sendstr(req, "Post control value successfully");
     return ESP_OK;
@@ -172,6 +173,31 @@ static esp_err_t temperature_data_get_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
+static esp_err_t system_status_get_handler(httpd_req_t *req) {
+
+    httpd_resp_set_type(req, "application/json");
+
+    cJSON *root = cJSON_CreateObject();
+    cJSON *temps = cJSON_CreateObject();
+    cJSON *brightness = cJSON_CreateObject();
+
+    cJSON_AddItemToObject(root, "temps", temps);
+    cJSON_AddNumberToObject(temps, "reservoir", (double) grab_ds18b20_temp(0));
+
+    cJSON_AddItemToObject(root, "brightness", brightness);
+    cJSON_AddNumberToObject(brightness, "red", globalLightingValues.red);
+    cJSON_AddNumberToObject(brightness, "green", globalLightingValues.green);
+    cJSON_AddNumberToObject(brightness, "blue", globalLightingValues.blue);
+    cJSON_AddNumberToObject(brightness, "warmwhite", globalLightingValues.warmwhite);
+
+    char *json_string = cJSON_Print(root);
+    httpd_resp_sendstr(req, json_string);
+    free((void *)json_string);
+    cJSON_Delete(root);
+
+    return ESP_OK;
+}
+
 esp_err_t start_rest_server(const char *base_path)
 {
     REST_CHECK(base_path, "wrong base path", err);
@@ -188,9 +214,9 @@ esp_err_t start_rest_server(const char *base_path)
 
     /* URI handler for fetching system info */
     httpd_uri_t system_info_get_uri = {
-        .uri = "/api/v1/system/info",
+        .uri = "/api/v1/status",
         .method = HTTP_GET,
-        .handler = system_info_get_handler,
+        .handler = system_status_get_handler,
         .user_ctx = rest_context
     };
     httpd_register_uri_handler(server, &system_info_get_uri);

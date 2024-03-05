@@ -53,6 +53,13 @@ static const char *TAG = "example";
 
 esp_err_t start_rest_server(const char *base_path);
 
+LightingValues globalLightingValues = {
+    .red = 0,
+    .green = 0,
+    .blue = 0,
+    .warmwhite = 100
+};
+
 static void initialise_mdns(void)
 {
     mdns_init();
@@ -132,8 +139,8 @@ float grab_ds18b20_temp(int idx) {
     return temperature;
 }
 
-void set_lighting_values(int red, int green, int blue, int warmwhite) {
-    ESP_ERROR_CHECK(ledc_set_duty(WW_LEDC_MODE, WW_LEDC_CHANNEL, warmwhite));
+void set_lighting_values_from_global() {
+    ESP_ERROR_CHECK(ledc_set_duty(WW_LEDC_MODE, WW_LEDC_CHANNEL, globalLightingValues.warmwhite));
     // Update duty to apply the new value
     ESP_ERROR_CHECK(ledc_update_duty(WW_LEDC_MODE, WW_LEDC_CHANNEL));
 
@@ -228,6 +235,7 @@ void app_main(void)
     netbiosns_init();
     netbiosns_set_name(CONFIG_EXAMPLE_MDNS_HOST_NAME);
     initialize_attached_hw();
+    set_lighting_values_from_global();
 
     ESP_ERROR_CHECK(example_connect());
     ESP_ERROR_CHECK(init_fs());
